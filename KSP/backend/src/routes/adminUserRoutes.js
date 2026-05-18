@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const Order = require('../models/Order');
 
 /**
  * GET /api/admin/users
@@ -36,11 +37,29 @@ router.get('/', async (req, res) => {
       .select('-password')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .skip(skip);
+      .skip(skip)
+      .lean();
+
+    // Get order counts for each user
+    const userIds = users.map(u => u._id);
+    const orderCounts = await Order.aggregate([
+      { $match: { userId: { $in: userIds } } },
+      { $group: { _id: '$userId', count: { $sum: 1 } } }
+    ]);
+
+    const orderCountMap = {};
+    orderCounts.forEach(oc => {
+      orderCountMap[oc._id.toString()] = oc.count;
+    });
+
+    const usersWithOrderCounts = users.map(u => ({
+      ...u,
+      orderCount: orderCountMap[u._id.toString()] || 0
+    }));
 
     res.json({
       success: true,
-      data: users,
+      data: usersWithOrderCounts,
       pagination: {
         total,
         page: parseInt(page),
@@ -176,6 +195,62 @@ router.put('/:userId/status', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to update user status'
+    });
+  }
+});
+
+/**
+ * DELETE /api/admin/users/:userId
+ * Permanently delete a user
+ */
+router.delete('/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Validate userId is valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user ID'
+      });
+    }
+
+    // Prevent deleting own account (assuming req.user exists from authenticate midddleware)
+    if (req.user && userId === req.user.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete your own admin account'
+      });
+    }
+
+    // Check if user has any existing orders before deleting
+    const orderCount = await Order.countDocuments({ userId: userId });
+    if (orderCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete user because there are some orders'
+      });
+    }
+
+    // Find and delete the user
+    const deletedUser = await User.findByIdAndDelete(userId);
+
+    if (!deletedUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete user'
     });
   }
 });

@@ -4,6 +4,7 @@ const router = express.Router();
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { sendMail } = require('../utils/mailer');
 
 const getFrontendUrl = (path) => {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -594,7 +595,7 @@ router.post('/logout', (req, res) => {
 
 /**
  * POST /api/auth/forgot-password
- * Request password reset - generates a token for demo purposes
+ * Request password reset and send a verification code by email
  */
 router.post('/forgot-password', async (req, res) => {
   try {
@@ -613,11 +614,11 @@ router.post('/forgot-password', async (req, res) => {
     if (!user) {
       return res.json({
         success: true,
-        message: 'If an account with that email exists, a password reset link has been sent.'
+        message: 'If an account with that email exists, a password reset code has been sent.'
       });
     }
 
-    // Generate reset token (6-digit code for demo)
+    // Generate reset token (6-digit code)
     const resetToken = Math.floor(100000 + Math.random() * 900000).toString();
     const resetExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
@@ -625,15 +626,49 @@ router.post('/forgot-password', async (req, res) => {
     user.resetPasswordExpires = resetExpires;
     await user.save();
 
-    // In production, you would send an email here
-    // For demo, we'll log it and return in response (remove in production!)
-    console.log(`Password reset code for ${email}: ${resetToken}`);
+    const expiresInMinutes = 15;
+    const subject = 'Your Kandy Super Phone password reset code';
+    const text = [
+      'We received a request to reset your password.',
+      '',
+      `Your verification code is: ${resetToken}`,
+      `This code expires in ${expiresInMinutes} minutes.`,
+      '',
+      'If you did not request this, you can safely ignore this email.',
+    ].join('\n');
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.6;">
+        <h2 style="margin: 0 0 16px; color: #b91c1c;">Password Reset Verification Code</h2>
+        <p style="margin: 0 0 12px;">We received a request to reset your password.</p>
+        <div style="display: inline-block; padding: 14px 20px; font-size: 28px; font-weight: 700; letter-spacing: 6px; background: #f3f4f6; border-radius: 12px; margin: 8px 0 16px;">${resetToken}</div>
+        <p style="margin: 0 0 12px;">This code expires in <strong>${expiresInMinutes} minutes</strong>.</p>
+        <p style="margin: 0; color: #6b7280;">If you did not request this, you can ignore this email.</p>
+      </div>
+    `;
+
+    try {
+      await sendMail({
+        to: user.email,
+        subject,
+        text,
+        html,
+      });
+    } catch (mailError) {
+      user.resetPasswordToken = null;
+      user.resetPasswordExpires = null;
+      await user.save();
+
+      console.error('Password reset email error:', mailError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send password reset email',
+      });
+    }
 
     res.json({
       success: true,
-      message: 'If an account with that email exists, a password reset link has been sent.',
-      // DEMO ONLY - remove in production!
-      demoResetCode: resetToken
+      message: 'If an account with that email exists, a password reset code has been sent.',
     });
   } catch (error) {
     console.error('Forgot password error:', error);

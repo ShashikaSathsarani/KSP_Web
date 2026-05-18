@@ -20,6 +20,8 @@ const Home = () => {
   const [loadingDeals, setLoadingDeals] = useState(true);
   const [latestReviews, setLatestReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
+  const [heroVideoUrl, setHeroVideoUrl] = useState('');
+  const [loadingVideo, setLoadingVideo] = useState(true);
 
   // Get the backend URL for images
   const getImageUrl = (imageUrl) => {
@@ -89,9 +91,17 @@ const Home = () => {
       }
     };
     
+    // Fetch hero video locally instead of API
+    const fetchHeroVideo = () => {
+      setLoadingVideo(true);
+      setHeroVideoUrl('/videos/hero-video.mp4');
+      setLoadingVideo(false);
+    };
+    
     fetchNewArrivals();
     fetchPremiumDeals();
     fetchLatestReviews();
+    fetchHeroVideo();
   }, []);
 
   return (
@@ -104,28 +114,38 @@ const Home = () => {
         <div className="relative h-64 md:h-96 w-full overflow-hidden rounded-2xl shadow-2xl bg-black">
         
           {/* Video Background */}
-          <video
-            className="absolute inset-0 w-full h-full"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-              backgroundColor: '#000',
-            }}
-            onLoadStart={() => console.log('Video loading...')}
-            onCanPlay={() => console.log('Video ready')}
-            onError={(e) => console.error('Video error:', e)}
-          >
-            <source src="/videos/hero-video.mp4" type="video/mp4" />
-            <source src="/videos/hero-video.webm" type="video/webm" />
-            Your browser does not support the video tag.
-          </video>
+          {!loadingVideo && heroVideoUrl ? (
+            <video
+              key={heroVideoUrl}
+              className="absolute inset-0 w-full h-full"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                backgroundColor: '#000',
+              }}
+              onLoadStart={() => console.log('Video loading...')}
+              onCanPlay={() => console.log('Video ready')}
+              onError={(e) => console.error('Video error:', e)}
+            >
+              <source src={heroVideoUrl} />
+              Your browser does not support the video tag.
+            </video>
+          ) : !loadingVideo ? (
+            <div className="absolute inset-0 flex items-center justify-center text-white text-xl">
+              nothing to show
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-white text-xl">
+              Loading...
+            </div>
+          )}
 
           {/* Dark Overlay for Text Readability */}
           <div className="absolute inset-0 bg-black/20"></div>

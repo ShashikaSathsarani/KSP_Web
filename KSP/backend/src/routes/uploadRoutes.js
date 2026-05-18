@@ -1,9 +1,6 @@
-// Upload Routes
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 const { Readable } = require('stream');
 const cloudinary = require('../config/cloudinary');
 
@@ -53,21 +50,16 @@ const uploadBufferToCloudinary = (buffer, options = {}) => new Promise((resolve,
  */
 router.post('/product-image', upload.single('image'), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       return res.status(400).json({
         success: false,
-        message: 'No image file provided'
+        message: 'No file uploaded or unable to read image data'
       });
     }
 
-    if (!req.file.buffer) {
-      return res.status(400).json({
-        success: false,
-        message: 'Unable to read uploaded image data'
-      });
-    }
-
-    const uploadResult = await uploadBufferToCloudinary(req.file.buffer);
+    const uploadResult = await uploadBufferToCloudinary(req.file.buffer, {
+      folder: 'ksp_uploads/products'
+    });
 
     console.log('✅ Image uploaded to Cloudinary:', {
       originalName: req.file.originalname,
@@ -75,7 +67,7 @@ router.post('/product-image', upload.single('image'), async (req, res) => {
       publicId: uploadResult.public_id,
       url: uploadResult.secure_url
     });
-    
+
     res.json({
       success: true,
       message: 'Image uploaded successfully',
@@ -93,7 +85,7 @@ router.post('/product-image', upload.single('image'), async (req, res) => {
   }
 });
 
-// Configure multer for bank slips (use memory storage for Cloudinary upload)
+// Configure multer for bank slips
 const bankSlipFileFilter = (req, file, cb) => {
   try {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'application/pdf'];
@@ -120,7 +112,7 @@ const bankSlipUpload = multer({
  * POST /api/upload/bank-slip
  * Upload a bank slip image for payment verification
  */
-router.post('/bank-slip', bankSlipUpload.single('bankSlip'), async (req, res) => {
+router.post('/bank-slip', bankSlipUpload.single('slip'), async (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({
@@ -129,16 +121,13 @@ router.post('/bank-slip', bankSlipUpload.single('bankSlip'), async (req, res) =>
       });
     }
 
-    const buffer = req.file.buffer;
-    const originalName = req.file.originalname;
-
-    const uploadResult = await uploadBufferToCloudinary(buffer, {
+    const uploadResult = await uploadBufferToCloudinary(req.file.buffer, {
       folder: 'ksp_uploads/bank-slips',
       resource_type: 'auto'
     });
 
     console.log('✅ Bank slip uploaded to Cloudinary:', {
-      originalName,
+      originalName: req.file.originalname,
       size: req.file.size,
       publicId: uploadResult.public_id,
       url: uploadResult.secure_url
@@ -168,7 +157,7 @@ router.use((error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
         success: false,
-        message: 'File too large. Maximum size is 5MB.'
+        message: 'File too large. Maximum size is 5MB for products and 10MB for bank slips.'
       });
     }
     if (error.code === 'LIMIT_PART_COUNT') {
@@ -189,7 +178,7 @@ router.use((error, req, res, next) => {
   if (error.message && error.message.includes('Invalid file type')) {
     return res.status(400).json({
       success: false,
-      message: 'Invalid file type. Only JPEG, JPG, PNG and WebP are allowed.'
+      message: error.message
     });
   }
   

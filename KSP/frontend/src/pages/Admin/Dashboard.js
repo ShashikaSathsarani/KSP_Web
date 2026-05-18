@@ -510,6 +510,31 @@ const AdminDashboard = () => {
     }
   };
 
+  // Delete client
+  const handleDeleteClient = async (client) => {
+    // Client-side check before hitting the API
+    if (client.orderCount > 0) {
+      alert("Cannot delete user because there are some orders");
+      return;
+    }
+
+    try {
+      const response = await api.delete(`/admin/users/${client._id}`);
+      if (response.data.success) {
+        setSuccess('User deleted successfully!');
+        if (selectedClient && selectedClient._id === client._id) {
+          setShowClientDetail(false);
+          setSelectedClient(null);
+        }
+        fetchClients();
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || 'Failed to delete user';
+      alert(errorMessage);
+    }
+  };
+
   // Handle profile form changes
   const handleProfileFormChange = (e) => {
     const { name, value } = e.target;
@@ -942,7 +967,8 @@ const AdminDashboard = () => {
   const handleDeleteProduct = async () => {
     setLoading(true);
     try {
-      await api.delete(`/admin/products/${selectedProduct._id}`);
+      // Use the permanent delete endpoint to physically remove it from database
+      await api.delete(`/admin/products/${selectedProduct._id}/permanent`);
       setSuccess('Product deleted successfully!');
       setShowDeleteConfirm(false);
       setSelectedProduct(null);
@@ -2091,6 +2117,21 @@ const AdminDashboard = () => {
                         </button>
                         <button
                           onClick={() => {
+                            if (selectedClient.orderCount > 0) {
+                              alert("Cannot delete user because there are some orders");
+                            } else {
+                              if (window.confirm('Are you sure you want to permanently delete this user?')) {
+                                handleDeleteClient(selectedClient);
+                              }
+                            }
+                          }}
+                          className="px-4 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                          title="Delete User"
+                        >
+                          <Trash2 size={18} /> Delete
+                        </button>
+                        <button
+                          onClick={() => {
                             setShowClientDetail(false);
                             setSelectedClient(null);
                           }}
@@ -2833,6 +2874,7 @@ const AdminDashboard = () => {
               </div>
 
               {success && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm">{success}</div>}
+              {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
 
               {/* Store Settings */}
               {settingsTab === 'store' && (

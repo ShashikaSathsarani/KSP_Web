@@ -5,9 +5,11 @@ import {
   Shield, Gift, CheckCircle, AlertCircle, Loader2, Check, X, Sparkles, Star
 } from 'lucide-react';
 import api from '../../services/api';
+import { useAuthStore } from '../../context/store';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { setUser } = useAuthStore();
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', email: '', phone: '',
     password: '', confirmPassword: ''
@@ -107,8 +109,7 @@ const Register = () => {
       });
 
       if (response.data.success) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        setUser(response.data.user, response.data.token);
         setSuccess('Account created successfully! Redirecting...');
         
         setTimeout(() => navigate('/'), 1000);
