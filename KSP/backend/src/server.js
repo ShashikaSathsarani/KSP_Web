@@ -5,9 +5,46 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const connectDB = require('./config/mongodb');
 const authenticateToken = require('./middleware/authenticate');
+const authorizeAdmin = require('./middleware/authorize');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
+
+const isProduction = process.env.NODE_ENV === 'production';
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured before the server can start.');
+}
+if (isProduction && !process.env.MONGODB_URI) {
+  throw new Error('MONGODB_URI must be configured in production.');
+}
+if (isProduction && process.env.JWT_SECRET.length < 32) {
+  throw new Error('JWT_SECRET must be at least 32 characters in production.');
+}
+
+const configuredOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+  .map((origin) => {
+    try {
+      const parsedOrigin = new URL(origin);
+      if (!['http:', 'https:'].includes(parsedOrigin.protocol)) {
+        throw new Error('Origin must use HTTP or HTTPS.');
+      }
+      return parsedOrigin.origin;
+    } catch {
+      throw new Error(`Invalid CORS_ORIGIN value: ${origin}`);
+    }
+  });
+
+if (isProduction && configuredOrigins.length === 0) {
+  throw new Error('CORS_ORIGIN must contain at least one allowed origin in production.');
+}
+
+const allowedOrigins = new Set([
+  ...configuredOrigins,
+  ...(isProduction ? [] : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'])
+]);
 
 // Connect to MongoDB
 connectDB();
@@ -18,23 +55,10 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
 }));
 
-// CORS Configuration - Allow multiple origins
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://localhost:3002',
-  process.env.CORS_ORIGIN
-].filter(Boolean);
-
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Allow all origins in development
-    }
+    callback(null, allowedOrigins.has(origin));
   },
   credentials: true,
   optionsSuccessStatus: 200
@@ -59,6 +83,9 @@ app.use('/api/', limiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);
+
+// Stripe requires the exact raw request body to verify webhook signatures.
+app.use('/api/payments/stripe-webhook', express.raw({ type: 'application/json' }), require('./routes/stripeWebhookRoute'));
 
 // Body Parsing Middleware
 app.use(express.json({ limit: '10mb' }));
@@ -110,11 +137,11 @@ app.use('/api/subscriptions', authenticateToken, require('./routes/subscriptionR
 app.use('/api/reviews', require('./routes/reviewRoutes'));
 
 // Admin Routes (protected)
-app.use('/api/admin/products', authenticateToken, require('./routes/adminProductRoutes'));
-app.use('/api/admin/orders', authenticateToken, require('./routes/adminOrderRoutes'));
-app.use('/api/admin/users', authenticateToken, require('./routes/adminUserRoutes'));
-app.use('/api/admin/reports', authenticateToken, require('./routes/adminReportRoutes'));
-app.use('/api/admin/subscriptions', authenticateToken, require('./routes/adminSubscriptionRoutes'));
+app.use('/api/admin/products', authenticateToken, authorizeAdmin, require('./routes/adminProductRoutes'));
+app.use('/api/admin/orders', authenticateToken, authorizeAdmin, require('./routes/adminOrderRoutes'));
+app.use('/api/admin/users', authenticateToken, authorizeAdmin, require('./routes/adminUserRoutes'));
+app.use('/api/admin/reports', authenticateToken, authorizeAdmin, require('./routes/adminReportRoutes'));
+app.use('/api/admin/subscriptions', authenticateToken, authorizeAdmin, require('./routes/adminSubscriptionRoutes'));
 
 // 404 Handler
 app.use((req, res) => {

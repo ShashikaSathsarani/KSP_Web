@@ -38,7 +38,7 @@ import {
   Home,
   Clock
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { resolveMediaUrl } from '../../services/api';
 import { authService, adminService } from '../../services/apiService';
 import { useNavigate } from 'react-router-dom';
 import Subscriptions from './Subscriptions';
@@ -69,6 +69,8 @@ const AdminDashboard = () => {
   const [orderStatusFilter, setOrderStatusFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showOrderDetail, setShowOrderDetail] = useState(false);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [recentOrdersLoading, setRecentOrdersLoading] = useState(false);
   
   // Payments state
   const [pendingPayments, setPendingPayments] = useState([]);
@@ -294,12 +296,28 @@ const AdminDashboard = () => {
     }
   }, [salesTimeFilter]);
 
+  // Fetch recent orders specifically for dashboard
+  const fetchRecentOrders = useCallback(async () => {
+    setRecentOrdersLoading(true);
+    try {
+      const response = await adminService.getAllOrders({ limit: 5 });
+      if (response.data.success) {
+        setRecentOrders(response.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch recent orders:', err);
+    } finally {
+      setRecentOrdersLoading(false);
+    }
+  }, []);
+
   // Fetch sales report when tab changes or filter changes
   useEffect(() => {
     if (activeTab === 'overview') {
       fetchSalesReport();
+      fetchRecentOrders();
     }
-  }, [activeTab, fetchSalesReport]);
+  }, [activeTab, fetchSalesReport, fetchRecentOrders]);
 
   // Load profile when profile tab is active
   useEffect(() => {
@@ -367,6 +385,28 @@ const AdminDashboard = () => {
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update order status');
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // Delete order
+  const handleDeleteOrder = async (orderId) => {
+    const confirmed = window.confirm('Delete this order? This will remove the order and its items.');
+    if (!confirmed) return;
+
+    try {
+      const response = await adminService.deleteOrder(orderId);
+      if (response.data.success) {
+        setSuccess('Order deleted successfully');
+        setShowOrderDetail(false);
+        setSelectedOrder(null);
+        fetchOrders();
+        fetchRecentOrders();
+        fetchPendingPayments();
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to delete order');
       setTimeout(() => setError(''), 3000);
     }
   };
@@ -467,6 +507,31 @@ const AdminDashboard = () => {
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to update client status');
       setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // Delete client
+  const handleDeleteClient = async (client) => {
+    // Client-side check before hitting the API
+    if (client.orderCount > 0) {
+      alert("Cannot delete user because there are some orders");
+      return;
+    }
+
+    try {
+      const response = await api.delete(`/admin/users/${client._id}`);
+      if (response.data.success) {
+        setSuccess('User deleted successfully!');
+        if (selectedClient && selectedClient._id === client._id) {
+          setShowClientDetail(false);
+          setSelectedClient(null);
+        }
+        fetchClients();
+        setTimeout(() => setSuccess(''), 3000);
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || 'Failed to delete user';
+      alert(errorMessage);
     }
   };
 
@@ -628,16 +693,13 @@ const AdminDashboard = () => {
       console.log('📎 Server response:', response.data);
       
       if (response.data.success) {
-        // Store the temporary image URL
-        // This will be renamed to use product ID after product creation
         setProductForm(prev => ({ 
           ...prev, 
-          imageUrl: response.data.imageUrl 
+          imageUrl: response.data.secure_url || response.data.imageUrl 
         }));
-        console.log('💾 Image URL stored (temporary):', response.data.imageUrl);
-        console.log('💡 Image filename:', response.data.filename);
-        console.log('ℹ️ This temporary image will be renamed using the product ID after product is created');
-        setSuccess('✅ Image uploaded successfully! It will be renamed when you add the product.');
+        console.log('💾 Cloudinary image URL stored:', response.data.secure_url || response.data.imageUrl);
+        console.log('🆔 Cloudinary public ID:', response.data.public_id);
+        setSuccess('✅ Image uploaded successfully!');
         setTimeout(() => setSuccess(''), 3000);
       } else {
         const msg = response.data.message || 'Upload failed';
@@ -657,6 +719,10 @@ const AdminDashboard = () => {
       
       setError(msg);
       setImagePreview(null);
+      setProductForm(prev => ({
+        ...prev,
+        imageUrl: ''
+      }));
       setTimeout(() => setError(''), 5000);
     } finally {
       setUploadingImage(false);
@@ -852,35 +918,6 @@ const AdminDashboard = () => {
       console.log('✅ Product created successfully!');
       console.log('📦 Response data:', response.data);
       
-      // If image was uploaded and product created, rename the image file to use product ID
-      if (productForm.imageUrl && response.data.product && response.data.product._id) {
-        const productId = response.data.product._id;
-        const tempFilename = productForm.imageUrl.split('/').pop(); // Extract filename
-        
-        console.log('🖼️ Renaming image for product:', productId);
-        
-        try {
-          const renameResponse = await api.post('/upload/rename-image', {
-            oldFilename: tempFilename,
-            productId: productId
-          });
-          
-          if (renameResponse.data.success) {
-            console.log('✅ Image renamed successfully:', renameResponse.data.imageUrl);
-            
-            // Update product with new image URL
-            const updateResponse = await api.put(`/admin/products/${productId}`, {
-              imageUrl: renameResponse.data.imageUrl
-            });
-            
-            console.log('✅ Product image URL updated:', updateResponse.data);
-          }
-        } catch (renameErr) {
-          console.warn('⚠️ Could not rename image:', renameErr.message);
-          // Don't fail the product creation if image rename fails
-        }
-      }
-      
       setSuccess('Product created successfully!');
       setShowAddProduct(false);
       resetForm();
@@ -930,7 +967,8 @@ const AdminDashboard = () => {
   const handleDeleteProduct = async () => {
     setLoading(true);
     try {
-      await api.delete(`/admin/products/${selectedProduct._id}`);
+      // Use the permanent delete endpoint to physically remove it from database
+      await api.delete(`/admin/products/${selectedProduct._id}/permanent`);
       setSuccess('Product deleted successfully!');
       setShowDeleteConfirm(false);
       setSelectedProduct(null);
@@ -956,7 +994,7 @@ const AdminDashboard = () => {
 
   const openEditModal = (product) => {
     setSelectedProduct(product);
-    setImagePreview(product.imageUrl ? `http://localhost:5000${product.imageUrl}` : null);
+    setImagePreview(resolveMediaUrl(product.imageUrl));
     setProductForm({
       name: product.name, description: product.description || '', brand: product.brand,
       price: product.price, storage: product.storage, condition: product.condition,
@@ -1005,12 +1043,7 @@ const AdminDashboard = () => {
     { label: 'Out of Stock', value: products.filter(p => p.quantity === 0).length, change: '0', icon: X, color: 'bg-red-500' }
   ];
 
-  const recentOrders = [
-    { id: 'ORD-2025-001', customer: 'Kasun Perera', product: 'iPhone 15 Pro', amount: 'LKR 389,000', status: 'Delivered', date: '2025-12-27' },
-    { id: 'ORD-2025-002', customer: 'Nimali Silva', product: 'Samsung S24', amount: 'LKR 329,000', status: 'Shipped', date: '2025-12-26' },
-    { id: 'ORD-2025-003', customer: 'Ruwan Fernando', product: 'Xiaomi 14', amount: 'LKR 189,000', status: 'Processing', date: '2025-12-26' },
-    { id: 'ORD-2025-004', customer: 'Dilini J.', product: 'AirPods Pro', amount: 'LKR 78,000', status: 'Pending', date: '2025-12-25' }
-  ];
+
 
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
@@ -1327,23 +1360,41 @@ const AdminDashboard = () => {
                 <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-bold text-gray-900">Recent Orders</h2>
-                    <button className="text-ksp-red text-sm font-semibold hover:underline">View All</button>
+                    <button 
+                    onClick={() => setActiveTab('orders')}
+                    className="text-ksp-red text-sm font-semibold hover:underline">View All</button>
                   </div>
                   <div className="space-y-4">
-                    {recentOrders.slice(0, 4).map((order, i) => (
-                      <div key={i} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer">
-                        <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center">
-                          <ShoppingCart size={18} className="text-gray-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 text-sm truncate">{order.customer}</p>
-                          <p className="text-xs text-gray-500">{order.product}</p>
-                        </div>
-                        <span className={`px-2 py-1 rounded-lg text-xs font-semibold ${getStatusColor(order.status)}`}>
-                          {order.status}
-                        </span>
+                    {recentOrdersLoading ? (
+                      <div className="flex items-center justify-center py-10">
+                        <RefreshCw size={24} className="animate-spin text-ksp-red" />
                       </div>
-                    ))}
+                    ) : recentOrders.length > 0 ? (
+                      recentOrders.map((order, i) => (
+                        <div key={i} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors cursor-pointer" onClick={() => { setSelectedOrder(order); setShowOrderDetail(true); }}>
+                          <div className="w-10 h-10 bg-gray-200 rounded-xl flex items-center justify-center">
+                            <ShoppingCart size={18} className="text-gray-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-gray-900 text-sm truncate">
+                              {order.userId ? `${order.userId.firstName} ${order.userId.lastName}` : 'Guest Customer'}
+                            </p>
+                            <p className="text-xs text-gray-500 truncate">
+                              {order.items && order.items.length > 0 
+                                ? `${order.items[0].productId?.name || 'Product'}${order.items.length > 1 ? ` + ${order.items.length - 1} more` : ''}`
+                                : 'No items'}
+                            </p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${getStatusColor(order.status)}`}>
+                            {order.status}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-10">
+                        <p className="text-gray-500 text-sm">No recent orders</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -2066,6 +2117,21 @@ const AdminDashboard = () => {
                         </button>
                         <button
                           onClick={() => {
+                            if (selectedClient.orderCount > 0) {
+                              alert("Cannot delete user because there are some orders");
+                            } else {
+                              if (window.confirm('Are you sure you want to permanently delete this user?')) {
+                                handleDeleteClient(selectedClient);
+                              }
+                            }
+                          }}
+                          className="px-4 py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                          title="Delete User"
+                        >
+                          <Trash2 size={18} /> Delete
+                        </button>
+                        <button
+                          onClick={() => {
                             setShowClientDetail(false);
                             setSelectedClient(null);
                           }}
@@ -2273,30 +2339,38 @@ const AdminDashboard = () => {
                 
                 <div className="p-6 space-y-6">
                   {/* Status */}
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-gray-500">Status:</span>
-                    <select
-                      value={selectedOrder.status}
-                      onChange={(e) => {
-                        handleUpdateOrderStatus(selectedOrder._id, e.target.value);
-                        setSelectedOrder({ ...selectedOrder, status: e.target.value });
-                      }}
-                      className={`px-4 py-2 rounded-xl font-semibold border-0 cursor-pointer ${
-                        selectedOrder.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                        selectedOrder.status === 'shipped' ? 'bg-purple-100 text-purple-700' :
-                        selectedOrder.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
-                        selectedOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
-                        selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                        'bg-orange-100 text-orange-700'
-                      }`}
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-gray-500">Status:</span>
+                      <select
+                        value={selectedOrder.status}
+                        onChange={(e) => {
+                          handleUpdateOrderStatus(selectedOrder._id, e.target.value);
+                          setSelectedOrder({ ...selectedOrder, status: e.target.value });
+                        }}
+                        className={`px-4 py-2 rounded-xl font-semibold border-0 cursor-pointer ${
+                          selectedOrder.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                          selectedOrder.status === 'shipped' ? 'bg-purple-100 text-purple-700' :
+                          selectedOrder.status === 'processing' ? 'bg-yellow-100 text-yellow-700' :
+                          selectedOrder.status === 'confirmed' ? 'bg-blue-100 text-blue-700' :
+                          selectedOrder.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="processing">Processing</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteOrder(selectedOrder._id)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-semibold"
                     >
-                      <option value="pending">Pending</option>
-                      <option value="confirmed">Confirmed</option>
-                      <option value="processing">Processing</option>
-                      <option value="shipped">Shipped</option>
-                      <option value="delivered">Delivered</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                      <Trash2 size={16} /> Delete Order
+                    </button>
                   </div>
 
                   {/* Customer Info */}
@@ -2345,7 +2419,7 @@ const AdminDashboard = () => {
                       </h3>
                       <div className="flex items-center gap-4">
                         <a 
-                          href={`http://localhost:5000${selectedOrder.bankSlipUrl}`}
+                          href={resolveMediaUrl(selectedOrder.bankSlipUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -2395,7 +2469,7 @@ const AdminDashboard = () => {
                         <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
                           <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
                             {item.productId?.imageUrl ? (
-                              <img src={item.productId.imageUrl.startsWith('http') ? item.productId.imageUrl : `http://localhost:5000${item.productId.imageUrl}`} alt="" className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(item.productId.imageUrl)} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <Box size={24} className="text-gray-300" />
                             )}
@@ -2558,7 +2632,7 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4">
                               {payment.bankSlipUrl ? (
                                 <a 
-                                  href={`http://localhost:5000${payment.bankSlipUrl}`}
+                                  href={resolveMediaUrl(payment.bankSlipUrl)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm"
@@ -2691,7 +2765,7 @@ const AdminDashboard = () => {
                             <FileText size={48} className="mx-auto mb-4 text-red-500" />
                             <p className="text-gray-600 mb-4">PDF Bank Slip</p>
                             <a 
-                              href={`http://localhost:5000${selectedPayment.bankSlipUrl}`}
+                              href={resolveMediaUrl(selectedPayment.bankSlipUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-2 px-4 py-2 bg-ksp-red text-white rounded-lg hover:bg-red-700 transition-colors"
@@ -2701,14 +2775,14 @@ const AdminDashboard = () => {
                           </div>
                         ) : (
                           <img 
-                            src={`http://localhost:5000${selectedPayment.bankSlipUrl}`}
+                            src={resolveMediaUrl(selectedPayment.bankSlipUrl)}
                             alt="Bank Slip"
                             className="w-full max-h-96 object-contain"
                           />
                         )}
                       </div>
                       <a 
-                        href={`http://localhost:5000${selectedPayment.bankSlipUrl}`}
+                        href={resolveMediaUrl(selectedPayment.bankSlipUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-3 inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm"
@@ -2728,7 +2802,7 @@ const AdminDashboard = () => {
                         <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
                           <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
                             {item.productId?.imageUrl ? (
-                              <img src={item.productId.imageUrl.startsWith('http') ? item.productId.imageUrl : `http://localhost:5000${item.productId.imageUrl}`} alt="" className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(item.productId.imageUrl)} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <Box size={24} className="text-gray-300" />
                             )}
@@ -2800,6 +2874,7 @@ const AdminDashboard = () => {
               </div>
 
               {success && <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm">{success}</div>}
+              {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
 
               {/* Store Settings */}
               {settingsTab === 'store' && (
@@ -3360,7 +3435,7 @@ const AdminDashboard = () => {
                   {(imagePreview || productForm.imageUrl) && (
                     <div className="relative w-32 h-32 border border-gray-200 rounded-xl overflow-hidden">
                       <img 
-                        src={imagePreview || (productForm.imageUrl.startsWith('/') ? `http://localhost:5000${productForm.imageUrl}` : productForm.imageUrl)} 
+                        src={imagePreview || resolveMediaUrl(productForm.imageUrl)}
                         alt="Preview" 
                         className="w-full h-full object-cover"
                       />
@@ -3515,7 +3590,7 @@ const AdminDashboard = () => {
                   {(imagePreview || productForm.imageUrl) && (
                     <div className="relative w-32 h-32 border border-gray-200 rounded-xl overflow-hidden">
                       <img 
-                        src={imagePreview || (productForm.imageUrl.startsWith('/') ? `http://localhost:5000${productForm.imageUrl}` : productForm.imageUrl)} 
+                        src={imagePreview || resolveMediaUrl(productForm.imageUrl)}
                         alt="Preview" 
                         className="w-full h-full object-cover"
                       />

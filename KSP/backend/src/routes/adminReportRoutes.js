@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const OrderItem = require('../models/OrderItem');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const { readQueryDate } = require('../utils/queryValidation');
 
 /**
  * GET /api/admin/reports/sales
@@ -13,7 +14,11 @@ const Product = require('../models/Product');
  */
 router.get('/sales', async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const startDate = readQueryDate(req.query.startDate);
+    const endDate = readQueryDate(req.query.endDate);
+    if (startDate === null || endDate === null) {
+      return res.status(400).json({ success: false, error: 'Invalid report date range' });
+    }
 
     // Build match stage for date filtering
     const matchStage = { status: { $ne: 'Cancelled' } };
@@ -77,7 +82,11 @@ router.get('/sales', async (req, res) => {
  */
 router.get('/revenue', async (req, res) => {
   try {
-    const { startDate, endDate, groupBy = 'product' } = req.query;
+    const startDate = readQueryDate(req.query.startDate);
+    const endDate = readQueryDate(req.query.endDate);
+    if (startDate === null || endDate === null) {
+      return res.status(400).json({ success: false, error: 'Invalid report date range' });
+    }
 
     // Build match stage for date filtering
     const matchStage = { 'order.status': { $ne: 'Cancelled' } };

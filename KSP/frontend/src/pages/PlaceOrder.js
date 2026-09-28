@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { orderService, authService } from '../services/apiService';
-import api from '../services/api';
+import api, { resolveMediaUrl } from '../services/api';
 import { Upload, CheckCircle, FileText, X } from 'lucide-react';
 
 const PlaceOrder = () => {
@@ -62,7 +62,7 @@ const PlaceOrder = () => {
   const imageSrc = useMemo(() => {
     const url = product?.imageUrl?.trim();
     if (!url) return 'https://via.placeholder.com/150x150?text=No+Image';
-    return url.startsWith('http') ? url : `http://localhost:5000${url}`;
+    return resolveMediaUrl(url);
   }, [product]);
 
   const subtotal = product ? parseFloat(product.price) * quantity : 0;
@@ -115,7 +115,7 @@ const PlaceOrder = () => {
 
     try {
       const formData = new FormData();
-      formData.append('bankSlip', file);
+      formData.append('slip', file);
       
       const response = await api.post('/upload/bank-slip', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }

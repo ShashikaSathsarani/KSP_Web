@@ -4,7 +4,7 @@ import {
   Mail, Lock, Eye, EyeOff, ArrowRight, Smartphone, 
   CheckCircle, AlertCircle, Loader2, Sparkles
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { API_BASE_URL } from '../../services/api';
 import { useAuthStore } from '../../context/store';
 
 const Login = () => {
@@ -20,8 +20,7 @@ const Login = () => {
   const { setUser } = useAuthStore();
 
   const startGoogleLogin = () => {
-    const apiBase = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-    window.location.href = `${apiBase}/auth/google`;
+    window.location.href = `${API_BASE_URL}/auth/google`;
   };
 
   // Check if already logged in
@@ -56,6 +55,14 @@ const Login = () => {
 
     if (!formData.email || !formData.password) {
       setError('Please fill in all fields');
+      setLoading(false);
+      return;
+    }
+
+    // Email validation: must contain '@' and end with 'gmail.com'
+    const emailLower = formData.email.toLowerCase().trim();
+    if (!emailLower.includes('@') || !emailLower.endsWith('.com')) {
+      setError('Please enter a valid Gmail address (e.g., user@gmail.com)');
       setLoading(false);
       return;
     }

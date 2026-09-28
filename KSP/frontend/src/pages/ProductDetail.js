@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { FaStar, FaShoppingCart, FaBox, FaShieldAlt, FaRegStar, FaStarHalfAlt, FaCheckCircle } from 'react-icons/fa';
+import { FaStar, FaShoppingCart, FaBox, FaShieldAlt, FaCheckCircle } from 'react-icons/fa';
 import { productService, reviewService, authService } from '../services/apiService';
+import { resolveMediaUrl } from '../services/api';
 
 const ProductDetail = () => {
   const { id } = useParams();
@@ -69,7 +70,7 @@ const ProductDetail = () => {
   const imageSrc = useMemo(() => {
     const url = product?.imageUrl?.trim();
     if (!url) return 'https://via.placeholder.com/500x500?text=No+Image';
-    return url.startsWith('http') ? url : `http://localhost:5000${url}`;
+    return resolveMediaUrl(url);
   }, [product]);
 
   const inStock = (product?.quantity ?? 0) > 0;

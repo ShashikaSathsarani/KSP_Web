@@ -165,6 +165,12 @@ router.post('/checkout', async (req, res) => {
         error: 'All shipping and payment details are required'
       });
     }
+    if (paymentMethod !== 'cash_on_delivery') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cart checkout currently supports cash on delivery only'
+      });
+    }
 
     // Get user's cart
     const cartItems = await Cart.find({ userId }).populate('productId');
@@ -260,6 +266,27 @@ router.post('/direct', async (req, res) => {
         success: false,
         error: 'All fields are required: productId, quantity, shippingAddress, shippingCity, shippingProvince, shippingPostalCode, paymentMethod'
       });
+    }
+    if (!['cash_on_delivery', 'bank_slip'].includes(paymentMethod)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unsupported payment method'
+      });
+    }
+    if (paymentMethod === 'bank_slip') {
+      let bankSlipUrlIsValid = false;
+      try {
+        const url = new URL(bankSlipUrl);
+        bankSlipUrlIsValid = url.protocol === 'https:'
+          && url.hostname === 'res.cloudinary.com'
+          && url.pathname.includes('/ksp_uploads/bank-slips/');
+      } catch {}
+      if (!bankSlipUrlIsValid) {
+        return res.status(400).json({
+          success: false,
+          error: 'A valid Cloudinary bank slip URL is required'
+        });
+      }
     }
 
     // Get product details

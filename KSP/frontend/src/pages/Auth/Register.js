@@ -5,9 +5,11 @@ import {
   Shield, Gift, CheckCircle, AlertCircle, Loader2, Check, X, Sparkles, Star
 } from 'lucide-react';
 import api from '../../services/api';
+import { useAuthStore } from '../../context/store';
 
 const Register = () => {
   const navigate = useNavigate();
+  const { setUser } = useAuthStore();
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', email: '', phone: '',
     password: '', confirmPassword: ''
@@ -64,8 +66,10 @@ const Register = () => {
     if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
+
+    // validate the email with @ sign and end with gmail.com
+    } else if (!formData.email.includes('@') || !formData.email.toLowerCase().trim().endsWith('gmail.com')) {
+      newErrors.email = 'Please enter a valid Gmail address (must contain @ and end with gmail.com)';
     }
     if (formData.phone && !/^[+]?[\d\s-]{10,}$/.test(formData.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Please enter a valid phone number';
@@ -105,8 +109,7 @@ const Register = () => {
       });
 
       if (response.data.success) {
-        localStorage.setItem('authToken', response.data.token);
-        localStorage.setItem('user', JSON.stringify(response.data.user));
+        setUser(response.data.user, response.data.token);
         setSuccess('Account created successfully! Redirecting...');
         
         setTimeout(() => navigate('/'), 1000);

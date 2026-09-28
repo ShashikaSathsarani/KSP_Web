@@ -9,7 +9,7 @@ import {
   Tag,
   Star
 } from 'lucide-react';
-import api from '../services/api';
+import api, { resolveMediaUrl } from '../services/api';
 import { reviewService } from '../services/apiService';
 
 const Home = () => {
@@ -20,16 +20,8 @@ const Home = () => {
   const [loadingDeals, setLoadingDeals] = useState(true);
   const [latestReviews, setLatestReviews] = useState([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
-
-  // Get the backend URL for images
-  const getImageUrl = (imageUrl) => {
-    if (!imageUrl) return null;
-    if (imageUrl.startsWith('http')) return imageUrl;
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-    // Remove /api from baseUrl if it exists for image paths
-    const serverUrl = baseUrl.replace('/api', '');
-    return `${serverUrl}${imageUrl}`;
-  };
+  const [heroVideoUrl, setHeroVideoUrl] = useState('');
+  const [loadingVideo, setLoadingVideo] = useState(true);
 
   useEffect(() => {
     // Fetch new arrivals
@@ -40,7 +32,7 @@ const Home = () => {
         console.log('📦 Products found:', response.data.products?.length || 0);
         if (response.data.products?.length > 0) {
           console.log('🖼️ First product image URL:', response.data.products[0].imageUrl);
-          console.log('🖼️ Constructed URL:', getImageUrl(response.data.products[0].imageUrl));
+          console.log('🖼️ Constructed URL:', resolveMediaUrl(response.data.products[0].imageUrl));
         }
         if (response.data.products?.length === 0) {
           console.warn('⚠️ No products marked as NEW ARRIVAL in database!');
@@ -89,9 +81,17 @@ const Home = () => {
       }
     };
     
+    // Fetch hero video locally instead of API
+    const fetchHeroVideo = () => {
+      setLoadingVideo(true);
+      setHeroVideoUrl('/videos/hero-video.mp4');
+      setLoadingVideo(false);
+    };
+    
     fetchNewArrivals();
     fetchPremiumDeals();
     fetchLatestReviews();
+    fetchHeroVideo();
   }, []);
 
   return (
@@ -104,28 +104,38 @@ const Home = () => {
         <div className="relative h-64 md:h-96 w-full overflow-hidden rounded-2xl shadow-2xl bg-black">
         
           {/* Video Background */}
-          <video
-            className="absolute inset-0 w-full h-full"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-              backgroundColor: '#000',
-            }}
-            onLoadStart={() => console.log('Video loading...')}
-            onCanPlay={() => console.log('Video ready')}
-            onError={(e) => console.error('Video error:', e)}
-          >
-            <source src="/videos/hero-video.mp4" type="video/mp4" />
-            <source src="/videos/hero-video.webm" type="video/webm" />
-            Your browser does not support the video tag.
-          </video>
+          {!loadingVideo && heroVideoUrl ? (
+            <video
+              key={heroVideoUrl}
+              className="absolute inset-0 w-full h-full"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                backgroundColor: '#000',
+              }}
+              onLoadStart={() => console.log('Video loading...')}
+              onCanPlay={() => console.log('Video ready')}
+              onError={(e) => console.error('Video error:', e)}
+            >
+              <source src={heroVideoUrl} />
+              Your browser does not support the video tag.
+            </video>
+          ) : !loadingVideo ? (
+            <div className="absolute inset-0 flex items-center justify-center text-white text-xl">
+              nothing to show
+            </div>
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center text-white text-xl">
+              Loading...
+            </div>
+          )}
 
           {/* Dark Overlay for Text Readability */}
           <div className="absolute inset-0 bg-black/20"></div>
@@ -199,7 +209,7 @@ const Home = () => {
                 <div className="relative h-64 overflow-hidden bg-white flex items-center justify-center">
                   {product.imageUrl ? (
                     <img 
-                      src={getImageUrl(product.imageUrl)} 
+                      src={resolveMediaUrl(product.imageUrl)}
                       alt={product.name}
                       className="w-full h-full object-scale-down p-4 transform group-hover:scale-105 transition-transform duration-500"
                       crossOrigin="anonymous"
@@ -314,7 +324,7 @@ const Home = () => {
                 <div className="relative h-64 overflow-hidden bg-white flex items-center justify-center">
                   {product.imageUrl ? (
                     <img 
-                      src={getImageUrl(product.imageUrl)} 
+                      src={resolveMediaUrl(product.imageUrl)}
                       alt={product.name}
                       className="w-full h-full object-scale-down p-4 transform group-hover:scale-105 transition-transform duration-500"
                       crossOrigin="anonymous"
@@ -455,7 +465,7 @@ const Home = () => {
             { name: "Earbuds", bg: "url(/images/earbuds-bg.jpg)" },
             { name: "Accessories", bg: "url(/images/accessories-bg.jpg)" }
           ].map((category, i) => (
-            <Link key={i} to={`/products?category=${category.name.toLowerCase()}`} className="group relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br from-gray-800 to-gray-900 backdrop-blur-md border border-white/30 cursor-pointer shadow-md hover:shadow-lg hover:border-ksp-red/50 transition-all duration-500 transform hover:scale-105 h-56" style={{ backgroundImage: category.bg, backgroundSize: 'cover', backgroundPosition: 'center' }}>
+            <Link key={i} to={`/products?productType=${category.name}`} className="group relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br from-gray-800 to-gray-900 backdrop-blur-md border border-white/30 cursor-pointer shadow-md hover:shadow-lg hover:border-ksp-red/50 transition-all duration-500 transform hover:scale-105 h-56" style={{ backgroundImage: category.bg, backgroundSize: 'cover', backgroundPosition: 'center' }}>
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent group-hover:from-black/90 group-hover:via-black/50 transition-all duration-500"></div>
               <div className="absolute inset-0 group-hover:bg-ksp-red/10 transition-colors duration-500"></div>
               <div className="relative z-10 flex flex-col items-center justify-end h-full text-center">
@@ -533,7 +543,7 @@ const Home = () => {
                   <div className="flex items-center gap-3 mb-4">
                     {review.product?.imageUrl && (
                       <img 
-                        src={getImageUrl(review.product.imageUrl)} 
+                        src={resolveMediaUrl(review.product.imageUrl)}
                         alt={review.product.name}
                         className="w-16 h-16 object-cover rounded-lg"
                         onError={(e) => { e.target.src = 'https://via.placeholder.com/64'; }}

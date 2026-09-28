@@ -8,7 +8,6 @@ let hasConnectedOnce = false;
 async function attemptConnect() {
   try {
     console.log('🔄 Connecting to MongoDB...');
-    console.log(`📍 URI: ${mongoURI}`);
 
     await mongoose.connect(mongoURI);
 

@@ -4,6 +4,15 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const OrderItem = require('../models/OrderItem');
+const Payment = require('../models/Payment');
+const Product = require('../models/Product');
+const {
+  escapeRegex,
+  readPositiveInteger,
+  readQueryDate,
+  readQueryEnum,
+  readQueryString,
+} = require('../utils/queryValidation');
 
 /**
  * GET /api/admin/orders
@@ -11,7 +20,15 @@ const OrderItem = require('../models/OrderItem');
  */
 router.get('/', async (req, res) => {
   try {
-    const { status, paymentStatus, page = 1, limit = 10, search } = req.query;
+    const status = readQueryEnum(req.query.status, ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled']);
+    const paymentStatus = readQueryEnum(req.query.paymentStatus, ['unpaid', 'pending_verification', 'paid', 'failed', 'refunded']);
+    const page = readPositiveInteger(req.query.page, 1, 100000);
+    const limit = readPositiveInteger(req.query.limit, 10, 100);
+    const search = readQueryString(req.query.search, 100);
+
+    if ([status, paymentStatus, page, limit, search].includes(null)) {
+      return res.status(400).json({ success: false, message: 'Invalid order query parameters' });
+    }
 
     // Build filter
     const filter = {};
@@ -20,8 +37,8 @@ router.get('/', async (req, res) => {
     if (search) {
       filter.$or = [
         { _id: mongoose.Types.ObjectId.isValid(search) ? new mongoose.Types.ObjectId(search) : null },
-        { shippingAddress: { $regex: search, $options: 'i' } },
-        { city: { $regex: search, $options: 'i' } }
+        { shippingAddress: { $regex: escapeRegex(search), $options: 'i' } },
+        { city: { $regex: escapeRegex(search), $options: 'i' } }
       ].filter(clause => Object.values(clause)[0] !== null);
     }
 
@@ -29,13 +46,13 @@ router.get('/', async (req, res) => {
     const total = await Order.countDocuments(filter);
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (page - 1) * limit;
 
     // Get orders
     const orders = await Order.find(filter)
       .populate('userId', 'firstName lastName email phone')
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(skip);
 
     // Get items for each order
@@ -56,9 +73,9 @@ router.get('/', async (req, res) => {
       data: ordersWithItems,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
@@ -281,7 +298,11 @@ router.put('/:orderId/verify-payment', async (req, res) => {
  */
 router.get('/reports/sales', async (req, res) => {
   try {
-    const { startDate, endDate, groupBy = 'daily' } = req.query;
+    const startDate = readQueryDate(req.query.startDate);
+    const endDate = readQueryDate(req.query.endDate);
+    if (startDate === null || endDate === null) {
+      return res.status(400).json({ success: false, error: 'Invalid report date range' });
+    }
 
     // Build match stage for date filtering
     const matchStage = { status: { $ne: 'Cancelled' } };
@@ -395,6 +416,58 @@ router.get('/reports/sales', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to generate sales report'
+    });
+  }
+});
+
+/**
+ * DELETE /api/admin/orders/:orderId
+ * Delete an order and its related records
+ */
+router.delete('/:orderId', async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid order ID'
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+
+    const orderItems = await OrderItem.find({ orderId: order._id });
+    const normalizedStatus = String(order.status || '').toLowerCase();
+    const shouldRestock = !['delivered', 'cancelled'].includes(normalizedStatus);
+
+    if (shouldRestock) {
+      for (const item of orderItems) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: { quantity: item.quantity }
+        });
+      }
+    }
+
+    await Payment.deleteOne({ orderId: order._id });
+    await OrderItem.deleteMany({ orderId: order._id });
+    await Order.findByIdAndDelete(orderId);
+
+    res.json({
+      success: true,
+      message: 'Order deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete order error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete order'
     });
   }
 });

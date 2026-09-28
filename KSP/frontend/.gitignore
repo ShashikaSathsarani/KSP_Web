@@ -15,3 +15,5 @@ yarn-error.log*
 .swo
 *.swp
 *.swo
+cypress/
+cypress.config.js
