@@ -3,6 +3,12 @@ const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
 const authorizeAdmin = require('../middleware/authorize');
+const {
+  escapeRegex,
+  readPositiveInteger,
+  readQueryEnum,
+  readQueryString,
+} = require('../utils/queryValidation');
 
 // Apply admin authorization to all routes
 router.use(authorizeAdmin);
@@ -13,26 +19,34 @@ router.use(authorizeAdmin);
  */
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, brand, condition } = req.query;
+    const page = readPositiveInteger(req.query.page, 1, 100000);
+    const limit = readPositiveInteger(req.query.limit, 20, 100);
+    const search = readQueryString(req.query.search, 100);
+    const brand = readQueryString(req.query.brand, 100);
+    const condition = readQueryEnum(req.query.condition, ['Brand New', 'Pre-Owned']);
+
+    if ([page, limit, search, brand, condition].includes(null)) {
+      return res.status(400).json({ success: false, message: 'Invalid product query parameters' });
+    }
     
     const filter = {};
     
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { sku: { $regex: search, $options: 'i' } },
-        { brand: { $regex: search, $options: 'i' } }
+        { name: { $regex: escapeRegex(search), $options: 'i' } },
+        { sku: { $regex: escapeRegex(search), $options: 'i' } },
+        { brand: { $regex: escapeRegex(search), $options: 'i' } }
       ];
     }
     
     if (brand) filter.brand = brand;
     if (condition) filter.condition = condition;
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (page - 1) * limit;
 
     const products = await Product.find(filter)
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(offset);
 
     const count = await Product.countDocuments(filter);
@@ -42,9 +56,9 @@ router.get('/', async (req, res) => {
       products,
       pagination: {
         total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit))
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit)
       }
     });
   } catch (error) {

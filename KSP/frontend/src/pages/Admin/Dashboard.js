@@ -38,7 +38,7 @@ import {
   Home,
   Clock
 } from 'lucide-react';
-import api from '../../services/api';
+import api, { resolveMediaUrl } from '../../services/api';
 import { authService, adminService } from '../../services/apiService';
 import { useNavigate } from 'react-router-dom';
 import Subscriptions from './Subscriptions';
@@ -994,7 +994,7 @@ const AdminDashboard = () => {
 
   const openEditModal = (product) => {
     setSelectedProduct(product);
-    setImagePreview(product.imageUrl ? `http://localhost:5000${product.imageUrl}` : null);
+    setImagePreview(resolveMediaUrl(product.imageUrl));
     setProductForm({
       name: product.name, description: product.description || '', brand: product.brand,
       price: product.price, storage: product.storage, condition: product.condition,
@@ -2419,7 +2419,7 @@ const AdminDashboard = () => {
                       </h3>
                       <div className="flex items-center gap-4">
                         <a 
-                          href={`http://localhost:5000${selectedOrder.bankSlipUrl}`}
+                          href={resolveMediaUrl(selectedOrder.bankSlipUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -2469,7 +2469,7 @@ const AdminDashboard = () => {
                         <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
                           <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
                             {item.productId?.imageUrl ? (
-                              <img src={item.productId.imageUrl.startsWith('http') ? item.productId.imageUrl : `http://localhost:5000${item.productId.imageUrl}`} alt="" className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(item.productId.imageUrl)} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <Box size={24} className="text-gray-300" />
                             )}
@@ -2632,7 +2632,7 @@ const AdminDashboard = () => {
                             <td className="px-6 py-4">
                               {payment.bankSlipUrl ? (
                                 <a 
-                                  href={`http://localhost:5000${payment.bankSlipUrl}`}
+                                  href={resolveMediaUrl(payment.bankSlipUrl)}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm"
@@ -2765,7 +2765,7 @@ const AdminDashboard = () => {
                             <FileText size={48} className="mx-auto mb-4 text-red-500" />
                             <p className="text-gray-600 mb-4">PDF Bank Slip</p>
                             <a 
-                              href={`http://localhost:5000${selectedPayment.bankSlipUrl}`}
+                              href={resolveMediaUrl(selectedPayment.bankSlipUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-2 px-4 py-2 bg-ksp-red text-white rounded-lg hover:bg-red-700 transition-colors"
@@ -2775,14 +2775,14 @@ const AdminDashboard = () => {
                           </div>
                         ) : (
                           <img 
-                            src={`http://localhost:5000${selectedPayment.bankSlipUrl}`}
+                            src={resolveMediaUrl(selectedPayment.bankSlipUrl)}
                             alt="Bank Slip"
                             className="w-full max-h-96 object-contain"
                           />
                         )}
                       </div>
                       <a 
-                        href={`http://localhost:5000${selectedPayment.bankSlipUrl}`}
+                        href={resolveMediaUrl(selectedPayment.bankSlipUrl)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="mt-3 inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm"
@@ -2802,7 +2802,7 @@ const AdminDashboard = () => {
                         <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
                           <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200">
                             {item.productId?.imageUrl ? (
-                              <img src={item.productId.imageUrl.startsWith('http') ? item.productId.imageUrl : `http://localhost:5000${item.productId.imageUrl}`} alt="" className="w-full h-full object-cover" />
+                              <img src={resolveMediaUrl(item.productId.imageUrl)} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <Box size={24} className="text-gray-300" />
                             )}
@@ -3435,7 +3435,7 @@ const AdminDashboard = () => {
                   {(imagePreview || productForm.imageUrl) && (
                     <div className="relative w-32 h-32 border border-gray-200 rounded-xl overflow-hidden">
                       <img 
-                        src={imagePreview || (productForm.imageUrl.startsWith('/') ? `http://localhost:5000${productForm.imageUrl}` : productForm.imageUrl)} 
+                        src={imagePreview || resolveMediaUrl(productForm.imageUrl)}
                         alt="Preview" 
                         className="w-full h-full object-cover"
                       />
@@ -3590,7 +3590,7 @@ const AdminDashboard = () => {
                   {(imagePreview || productForm.imageUrl) && (
                     <div className="relative w-32 h-32 border border-gray-200 rounded-xl overflow-hidden">
                       <img 
-                        src={imagePreview || (productForm.imageUrl.startsWith('/') ? `http://localhost:5000${productForm.imageUrl}` : productForm.imageUrl)} 
+                        src={imagePreview || resolveMediaUrl(productForm.imageUrl)}
                         alt="Preview" 
                         className="w-full h-full object-cover"
                       />

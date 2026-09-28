@@ -4,6 +4,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Order = require('../models/Order');
+const { escapeRegex, readPositiveInteger, readQueryEnum, readQueryString } = require('../utils/queryValidation');
 
 /**
  * GET /api/admin/users
@@ -11,7 +12,15 @@ const Order = require('../models/Order');
  */
 router.get('/', async (req, res) => {
   try {
-    const { role, status, page = 1, limit = 10, search } = req.query;
+    const role = readQueryEnum(req.query.role, ['customer', 'admin']);
+    const status = readQueryEnum(req.query.status, ['active', 'inactive']);
+    const page = readPositiveInteger(req.query.page, 1, 100000);
+    const limit = readPositiveInteger(req.query.limit, 10, 100);
+    const search = readQueryString(req.query.search, 100);
+
+    if ([role, status, page, limit, search].includes(null)) {
+      return res.status(400).json({ success: false, message: 'Invalid user query parameters' });
+    }
 
     // Build filter
     const filter = {};
@@ -19,10 +28,10 @@ router.get('/', async (req, res) => {
     if (status) filter.isActive = status === 'active';
     if (search) {
       filter.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } }
+        { firstName: { $regex: escapeRegex(search), $options: 'i' } },
+        { lastName: { $regex: escapeRegex(search), $options: 'i' } },
+        { email: { $regex: escapeRegex(search), $options: 'i' } },
+        { phone: { $regex: escapeRegex(search), $options: 'i' } }
       ];
     }
 
@@ -30,13 +39,13 @@ router.get('/', async (req, res) => {
     const total = await User.countDocuments(filter);
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (page - 1) * limit;
 
     // Get users
     const users = await User.find(filter)
       .select('-password')
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(skip)
       .lean();
 
@@ -62,9 +71,9 @@ router.get('/', async (req, res) => {
       data: usersWithOrderCounts,
       pagination: {
         total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {

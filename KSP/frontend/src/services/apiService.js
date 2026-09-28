@@ -46,7 +46,6 @@ export const orderService = {
 };
 
 export const paymentService = {
-  processPayment: (paymentData) => api.post('/payments/process-payment', paymentData),
   getPaymentStatus: (orderId) => api.get(`/payments/${orderId}`),
 };
 

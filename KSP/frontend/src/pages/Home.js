@@ -9,7 +9,7 @@ import {
   Tag,
   Star
 } from 'lucide-react';
-import api from '../services/api';
+import api, { resolveMediaUrl } from '../services/api';
 import { reviewService } from '../services/apiService';
 
 const Home = () => {
@@ -23,16 +23,6 @@ const Home = () => {
   const [heroVideoUrl, setHeroVideoUrl] = useState('');
   const [loadingVideo, setLoadingVideo] = useState(true);
 
-  // Get the backend URL for images
-  const getImageUrl = (imageUrl) => {
-    if (!imageUrl) return null;
-    if (imageUrl.startsWith('http')) return imageUrl;
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-    // Remove /api from baseUrl if it exists for image paths
-    const serverUrl = baseUrl.replace('/api', '');
-    return `${serverUrl}${imageUrl}`;
-  };
-
   useEffect(() => {
     // Fetch new arrivals
     const fetchNewArrivals = async () => {
@@ -42,7 +32,7 @@ const Home = () => {
         console.log('📦 Products found:', response.data.products?.length || 0);
         if (response.data.products?.length > 0) {
           console.log('🖼️ First product image URL:', response.data.products[0].imageUrl);
-          console.log('🖼️ Constructed URL:', getImageUrl(response.data.products[0].imageUrl));
+          console.log('🖼️ Constructed URL:', resolveMediaUrl(response.data.products[0].imageUrl));
         }
         if (response.data.products?.length === 0) {
           console.warn('⚠️ No products marked as NEW ARRIVAL in database!');
@@ -219,7 +209,7 @@ const Home = () => {
                 <div className="relative h-64 overflow-hidden bg-white flex items-center justify-center">
                   {product.imageUrl ? (
                     <img 
-                      src={getImageUrl(product.imageUrl)} 
+                      src={resolveMediaUrl(product.imageUrl)}
                       alt={product.name}
                       className="w-full h-full object-scale-down p-4 transform group-hover:scale-105 transition-transform duration-500"
                       crossOrigin="anonymous"
@@ -334,7 +324,7 @@ const Home = () => {
                 <div className="relative h-64 overflow-hidden bg-white flex items-center justify-center">
                   {product.imageUrl ? (
                     <img 
-                      src={getImageUrl(product.imageUrl)} 
+                      src={resolveMediaUrl(product.imageUrl)}
                       alt={product.name}
                       className="w-full h-full object-scale-down p-4 transform group-hover:scale-105 transition-transform duration-500"
                       crossOrigin="anonymous"
@@ -553,7 +543,7 @@ const Home = () => {
                   <div className="flex items-center gap-3 mb-4">
                     {review.product?.imageUrl && (
                       <img 
-                        src={getImageUrl(review.product.imageUrl)} 
+                        src={resolveMediaUrl(review.product.imageUrl)}
                         alt={review.product.name}
                         className="w-16 h-16 object-cover rounded-lg"
                         onError={(e) => { e.target.src = 'https://via.placeholder.com/64'; }}

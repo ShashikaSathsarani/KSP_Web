@@ -171,35 +171,6 @@ const Checkout = () => {
                   </div>
                 </label>
 
-                <label className="flex items-center p-4 border border-gray-200 rounded cursor-pointer hover:bg-ksp-gray transition">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="payhere"
-                    checked={formData.paymentMethod === 'payhere'}
-                    onChange={handleChange}
-                    className="mr-3"
-                  />
-                  <div>
-                    <p className="font-semibold text-ksp-black">PayHere</p>
-                    <p className="text-sm text-gray-600">Pay securely with PayHere</p>
-                  </div>
-                </label>
-
-                <label className="flex items-center p-4 border border-gray-200 rounded cursor-pointer hover:bg-ksp-gray transition">
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="stripe"
-                    checked={formData.paymentMethod === 'stripe'}
-                    onChange={handleChange}
-                    className="mr-3"
-                  />
-                  <div>
-                    <p className="font-semibold text-ksp-black">Stripe / Credit Card</p>
-                    <p className="text-sm text-gray-600">Pay with Visa, Mastercard, or Amex</p>
-                  </div>
-                </label>
               </div>
             </div>
           </div>

@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+export const API_BASE_URL = (process.env.REACT_APP_API_URL || '/api').replace(/\/+$/, '');
+
+export const resolveMediaUrl = (url) => {
+  if (!url) return null;
+
+  const mediaUrl = String(url).trim();
+  if (/^https?:\/\//i.test(mediaUrl)) return mediaUrl;
+
+  const apiOrigin = API_BASE_URL.replace(/\/api$/, '');
+  return `${apiOrigin}${mediaUrl.startsWith('/') ? '' : '/'}${mediaUrl}`;
+};
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -15,9 +25,6 @@ api.interceptors.request.use(
     const token = localStorage.getItem('authToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log(`🔑 [${config.method.toUpperCase()} ${config.url}] Token attached:`, token.substring(0, 20) + '...');
-    } else {
-      console.warn(`⚠️ [${config.method.toUpperCase()} ${config.url}] No token in localStorage`);
     }
     return config;
   },

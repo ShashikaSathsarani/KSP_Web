@@ -2,6 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
+const {
+  escapeRegex,
+  readNonNegativeNumber,
+  readPositiveInteger,
+  readQueryEnum,
+  readQueryString,
+} = require('../utils/queryValidation');
 
 /**
  * GET /api/products
@@ -9,20 +16,25 @@ const Product = require('../models/Product');
  */
 router.get('/', async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 12, 
-      brand, 
-      condition,
-      productType,
-      minPrice, 
-      maxPrice,
-      search,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC',
-      isNewArrival,
-      isPremiumDeal
-    } = req.query;
+    const page = readPositiveInteger(req.query.page, 1, 100000);
+    const limit = readPositiveInteger(req.query.limit, 12, 100);
+    const brand = readQueryString(req.query.brand, 100);
+    const condition = readQueryEnum(req.query.condition, ['Brand New', 'Pre-Owned']);
+    const productType = readQueryEnum(req.query.productType, ['Phones', 'Tablets', 'Earbuds', 'Smartwatches', 'Accessories']);
+    const minPrice = readNonNegativeNumber(req.query.minPrice);
+    const maxPrice = readNonNegativeNumber(req.query.maxPrice);
+    const search = readQueryString(req.query.search, 100);
+    const requestedSortBy = readQueryEnum(req.query.sortBy, ['createdAt', 'price', 'name']);
+    const requestedSortOrder = readQueryEnum(req.query.sortOrder, ['ASC', 'DESC']);
+    const sortBy = requestedSortBy === undefined || requestedSortBy === '' ? 'createdAt' : requestedSortBy;
+    const sortOrder = requestedSortOrder === undefined || requestedSortOrder === '' ? 'DESC' : requestedSortOrder;
+    const isNewArrival = readQueryEnum(req.query.isNewArrival, ['true', 'false']);
+    const isPremiumDeal = readQueryEnum(req.query.isPremiumDeal, ['true', 'false']);
+
+    if ([page, limit, brand, condition, productType, minPrice, maxPrice, search, sortBy, sortOrder, isNewArrival, isPremiumDeal].includes(null)
+      || (minPrice !== undefined && maxPrice !== undefined && minPrice > maxPrice)) {
+      return res.status(400).json({ success: false, message: 'Invalid product query parameters' });
+    }
 
     // Build filter object
     const filter = { isActive: true };
@@ -31,24 +43,24 @@ router.get('/', async (req, res) => {
     if (condition) filter.condition = condition;
     if (productType) filter.productType = productType;
 
-    if (isNewArrival === 'true') filter.isNewArrival = true;
-    if (isPremiumDeal === 'true') filter.isPremiumDeal = true;
+    if (isNewArrival !== undefined) filter.isNewArrival = isNewArrival === 'true';
+    if (isPremiumDeal !== undefined) filter.isPremiumDeal = isPremiumDeal === 'true';
 
-    if (minPrice || maxPrice) {
+    if (minPrice !== undefined || maxPrice !== undefined) {
       filter.price = {};
-      if (minPrice) filter.price.$gte = parseFloat(minPrice);
-      if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+      if (minPrice !== undefined) filter.price.$gte = minPrice;
+      if (maxPrice !== undefined) filter.price.$lte = maxPrice;
     }
 
     if (search) {
       filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { brand: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: { $regex: escapeRegex(search), $options: 'i' } },
+        { brand: { $regex: escapeRegex(search), $options: 'i' } },
+        { description: { $regex: escapeRegex(search), $options: 'i' } }
       ];
     }
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (page - 1) * limit;
 
     // Build sort object
     const sortObj = {};
@@ -56,7 +68,7 @@ router.get('/', async (req, res) => {
 
     const products = await Product.find(filter)
       .sort(sortObj)
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(offset);
 
     const count = await Product.countDocuments(filter);
@@ -65,9 +77,9 @@ router.get('/', async (req, res) => {
       products,
       pagination: {
         total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit))
+        page,
+        limit,
+        totalPages: Math.ceil(count / limit)
       }
     });
   } catch (error) {

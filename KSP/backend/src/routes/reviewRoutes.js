@@ -7,6 +7,7 @@ const Product = require('../models/Product');
 const Order = require('../models/Order');
 const OrderItem = require('../models/OrderItem');
 const authenticateToken = require('../middleware/authenticate');
+const { readPositiveInteger, readQueryEnum } = require('../utils/queryValidation');
 
 /**
  * GET /api/reviews/product/:productId
@@ -15,7 +16,16 @@ const authenticateToken = require('../middleware/authenticate');
 router.get('/product/:productId', async (req, res) => {
   try {
     const { productId } = req.params;
-    const { page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'DESC' } = req.query;
+    const page = readPositiveInteger(req.query.page, 1, 100000);
+    const limit = readPositiveInteger(req.query.limit, 10, 100);
+    const requestedSortBy = readQueryEnum(req.query.sortBy, ['createdAt', 'rating']);
+    const requestedSortOrder = readQueryEnum(req.query.sortOrder, ['ASC', 'DESC']);
+    const sortBy = requestedSortBy === undefined || requestedSortBy === '' ? 'createdAt' : requestedSortBy;
+    const sortOrder = requestedSortOrder === undefined || requestedSortOrder === '' ? 'DESC' : requestedSortOrder;
+
+    if ([page, limit, sortBy, sortOrder].includes(null)) {
+      return res.status(400).json({ success: false, message: 'Invalid review query parameters' });
+    }
 
     // Validate productId
     if (!mongoose.Types.ObjectId.isValid(productId)) {
@@ -34,7 +44,7 @@ router.get('/product/:productId', async (req, res) => {
       });
     }
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (page - 1) * limit;
     const sortObj = {};
     sortObj[sortBy] = sortOrder === 'DESC' ? -1 : 1;
 
@@ -42,7 +52,7 @@ router.get('/product/:productId', async (req, res) => {
     const reviews = await Review.find({ productId })
       .populate('userId', 'firstName lastName')
       .sort(sortObj)
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(offset);
 
     const totalReviews = await Review.countDocuments({ productId });
@@ -90,9 +100,9 @@ router.get('/product/:productId', async (req, res) => {
         distribution,
         pagination: {
           total: totalReviews,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: Math.ceil(totalReviews / parseInt(limit))
+          page,
+          limit,
+          totalPages: Math.ceil(totalReviews / limit)
         }
       }
     });
@@ -340,13 +350,16 @@ router.delete('/:reviewId', authenticateToken, async (req, res) => {
  */
 router.get('/latest', async (req, res) => {
   try {
-    const { limit = 5 } = req.query;
+    const limit = readPositiveInteger(req.query.limit, 5, 50);
+    if (limit === null) {
+      return res.status(400).json({ success: false, message: 'Invalid review query parameters' });
+    }
 
     const reviews = await Review.find()
       .populate('userId', 'firstName lastName')
       .populate('productId', 'name brand imageUrl')
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit));
+      .limit(limit);
 
     res.json({
       success: true,
@@ -386,14 +399,18 @@ router.get('/latest', async (req, res) => {
 router.get('/user/my-reviews', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { page = 1, limit = 10 } = req.query;
+    const page = readPositiveInteger(req.query.page, 1, 100000);
+    const limit = readPositiveInteger(req.query.limit, 10, 100);
+    if (page === null || limit === null) {
+      return res.status(400).json({ success: false, message: 'Invalid review query parameters' });
+    }
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const offset = (page - 1) * limit;
 
     const reviews = await Review.find({ userId })
       .populate('productId', 'name brand imageUrl')
       .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
+      .limit(limit)
       .skip(offset);
 
     const totalReviews = await Review.countDocuments({ userId });
@@ -404,9 +421,9 @@ router.get('/user/my-reviews', authenticateToken, async (req, res) => {
         reviews,
         pagination: {
           total: totalReviews,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: Math.ceil(totalReviews / parseInt(limit))
+          page,
+          limit,
+          totalPages: Math.ceil(totalReviews / limit)
         }
       }
     });

@@ -126,12 +126,7 @@ router.post('/bank-slip', bankSlipUpload.single('slip'), async (req, res) => {
       resource_type: 'auto'
     });
 
-    console.log('✅ Bank slip uploaded to Cloudinary:', {
-      originalName: req.file.originalname,
-      size: req.file.size,
-      publicId: uploadResult.public_id,
-      url: uploadResult.secure_url
-    });
+    console.log('Bank slip uploaded successfully.');
 
     res.json({
       success: true,

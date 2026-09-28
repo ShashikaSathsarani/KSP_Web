@@ -19,7 +19,7 @@ const signAuthToken = (user) => jwt.sign(
     firstName: user.firstName,
     lastName: user.lastName
   },
-  process.env.JWT_SECRET || 'your_jwt_secret_key',
+  process.env.JWT_SECRET,
   { expiresIn: '24h' }
 );
 
@@ -38,11 +38,11 @@ const buildAuthRedirect = (user, token) => {
 
 /**
  * POST /api/auth/register
- * Register a new customer or admin
+ * Register a new customer
  */
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role } = req.body;
+    const { email, password, firstName, lastName } = req.body;
 
     // Validate input
     if (!email || !password || !firstName || !lastName) {
@@ -68,7 +68,7 @@ router.post('/register', async (req, res) => {
       firstName,
       lastName,
       phone: req.body.phone || null,
-      role: role || 'customer',
+      role: 'customer',
       isActive: true
     });
 
@@ -180,7 +180,7 @@ router.post('/refresh-token', async (req, res) => {
     // Verify the token (even if expired, we can still decode it)
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       // If token is expired, we can still decode it to get user info
       if (error.name === 'TokenExpiredError') {
@@ -218,7 +218,7 @@ router.post('/refresh-token', async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName
       },
-      process.env.JWT_SECRET || 'your_jwt_secret_key',
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -380,7 +380,7 @@ router.get('/profile', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findById(decoded.id);
     if (!user) {
@@ -439,7 +439,7 @@ router.put('/profile', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const { firstName, lastName, phone, address, city, province, postalCode } = req.body;
 
@@ -512,7 +512,7 @@ router.put('/change-password', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const { currentPassword, newPassword } = req.body;
 
