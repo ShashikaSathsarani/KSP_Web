@@ -98,10 +98,10 @@ const Home = () => {
     <div className="text-gray-900 min-h-screen overflow-x-hidden" style={{ backgroundColor: '#c4c4c4', fontFamily: 'Montserrat, sans-serif' }}>
       
       {/* --- HERO SECTION --- */}
-      <section className="relative py-12 md:py-16 px-24 pt-12 md:pt-16" 
+      <section className="relative py-12 md:py-16 px-4 sm:px-8 md:px-16 lg:px-24 pt-12 md:pt-16" 
                onMouseEnter={() => setIsHovered(true)}
                onMouseLeave={() => setIsHovered(false)}>
-        <div className="relative h-64 md:h-96 w-full overflow-hidden rounded-2xl shadow-2xl bg-black">
+        <div className="relative aspect-video min-h-[180px] md:aspect-auto md:h-96 w-full overflow-hidden rounded-2xl shadow-2xl bg-black">
         
           {/* Video Background */}
           {!loadingVideo && heroVideoUrl ? (
